@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="29.381155mm"
+   height="15.530494mm"
+   viewBox="0 0 29.381155 15.530494"
+   version="1.1"
+   id="svg5"
+   sodipodi:docname="rj12-cable-pinout.svg"
+   inkscape:version="1.1.2 (b8e25be833, 2022-02-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="6.2217172"
+     inkscape:cx="60.996023"
+     inkscape:cy="40.262197"
+     inkscape:window-width="2560"
+     inkscape:window-height="1361"
+     inkscape:window-x="-9"
+     inkscape:window-y="-9"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-10.405566,-113.02393)">
+    <rect
+       style="fill:#999999;fill-opacity:1;stroke:none;stroke-width:0.088476;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       id="rect5655"
+       width="11.964108"
+       height="8.9868298"
+       x="19.593588"
+       y="118.78186" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#0000ff;stroke-width:0.153405;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       d="m 18.042461,120.16501 h 13.019622 v 0.29227"
+       id="path898" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.153405;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       d="m 18.042461,121.33461 h 13.019622 v 0.29227"
+       id="path898-3" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#ff0000;stroke-width:0.153405;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       d="m 18.042461,122.5956 h 13.019622 v 0.29227"
+       id="path898-3-7" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#7e3b00;stroke-width:0.153405;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       d="m 18.042461,123.83834 h 13.019622 v 0.29227"
+       id="path898-6" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#00ff00;stroke-width:0.153405;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       d="m 18.042461,125.00793 h 13.019622 v 0.29227"
+       id="path898-3-9" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#ffff00;stroke-width:0.153405;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:normal"
+       d="m 18.042461,126.26892 h 13.019622 v 0.29227"
+       id="path898-3-7-8" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#001700;stroke-width:0.0745811;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       d="m 16.551888,120.09961 h 3.077397 v 0.29227"
+       id="path898-2" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#001700;stroke-width:0.0745811;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       d="m 16.551888,121.26921 h 3.077397 v 0.29227"
+       id="path898-3-91" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#001700;stroke-width:0.0745811;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       d="m 16.551888,122.5302 h 3.077397 v 0.29227"
+       id="path898-3-7-5" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#001700;stroke-width:0.0745811;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       d="m 16.551888,123.77294 h 3.077397 v 0.29227"
+       id="path898-6-6" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#001700;stroke-width:0.0745811;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       d="m 16.551888,124.94253 h 3.077397 v 0.29227"
+       id="path898-3-9-7" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#001700;stroke-width:0.0745811;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       d="m 16.551888,126.20352 h 3.077397 v 0.29227"
+       id="path898-3-7-8-5" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:1.41111px;line-height:0;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="16.495916"
+       y="120.49242"
+       id="text11126-5-1"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.41111px;line-height:0.87;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="16.495916"
+         y="120.49242"
+         id="tspan20705-1">SWITCH</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.41111px;line-height:0.87;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="16.495916"
+         y="121.72009"
+         id="tspan27363">+12V</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.41111px;line-height:0.87;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="16.495916"
+         y="122.94775"
+         id="tspan28157">GND</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.41111px;line-height:0.87;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="16.495916"
+         y="124.17542"
+         id="tspan28159">DATA</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.41111px;line-height:0.87;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="16.495916"
+         y="125.40308"
+         id="tspan28161">CS</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:1.41111px;line-height:0.87;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';text-align:end;text-anchor:end;stroke-width:0.264583"
+         x="16.495916"
+         y="126.63074"
+         id="tspan28163">CLK</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:2.82222px;line-height:0.9;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="10.318749"
+       y="114.89531"
+       id="text33375"><tspan
+         sodipodi:role="line"
+         id="tspan33373"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:2.82222px;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';stroke-width:0.264583"
+         x="10.318749"
+         y="114.89531">Series 607 FSW Inverter</tspan><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:2.82222px;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';stroke-width:0.264583"
+         x="10.318749"
+         y="117.54066"
+         id="tspan37837">Remote Cable Pinout</tspan></text>
+    <rect
+       style="fill:#383838;fill-opacity:1;stroke:none;stroke-width:0.0603863;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.491557;paint-order:normal"
+       id="rect51093"
+       width="8.6507072"
+       height="10.335755"
+       x="31.136013"
+       y="118.21867" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:4.24067px;line-height:0.9;font-family:sans-serif;fill:#c5c5c5;fill-opacity:1;stroke:none;stroke-width:0.397563"
+       x="119.25006"
+       y="-34.353466"
+       id="text33375-1"
+       transform="rotate(90)"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:4.24067px;font-family:Calibri;-inkscape-font-specification:'Calibri Bold';fill:#c5c5c5;fill-opacity:1;stroke-width:0.397563"
+         x="119.25006"
+         y="-34.353466"
+         id="tspan4893">RJ12</tspan></text>
+  </g>
+</svg>
