@@ -1,12 +1,20 @@
-// Series 607 Inverter Arduino Remote Control
-// Andy Christiansson (@neuroticflux) 2023-08-13
+// Series 607 Inverter Arduino Interface
+// Andy Christiansson (@neuroticflux) 2023-08-15
 
-// This sketch lets an Arduino microcontroller interface with a Series 607 FSW inverter (like those sold by Kjell & Co in Sweden),
+// Check out the repo at https://github.com/neuroticflux/series607-inverter-control for details and the latest version.
+
+// This sketch lets an Arduino microcontroller interface with a Series 607 PSW inverter (like those sold by Kjell & Co in Sweden),
 // effectively hijacking the LCD remote protocol to read power and voltage values, and, with a simple external circuit,
 // allows the Arduino to remotely turn the inverter on and off.
 
-// Check out the repo at github.com/neuroticflux/series607-inverter-control for more info.
+// The interface speaks Modbus (currently over software serial port) and,
+// with the accompanying Python script, can be used from a Victron Cerbo GX,
+// a Raspberry Pi or other hardware running Venus OS.
 
+// Depends on ModbusSerial by @epsilonrt, found in the Arduino IDE Library Manager, or here:
+// https://github.com/epsilonrt/modbus-serial
+
+// DISCLAIMER:
 // THIS IS A HACK! USE AT YOUR OWN RISK! I have NOT tested this for safety, fire hazards etc. IT COULD BURN DOWN YOUR HOUSE/BOAT/MOTORHOME!
 // I take no responsibility for what you decide to do with this code.
 
@@ -14,7 +22,7 @@
 
 #include "Arduino.h"
 #include "SPI.h"
-//#include "ModbusSerial.h"
+#include "ModbusSerial.h"
 #include "SoftwareSerial.h"
 
 #define SET_ADDRESS_ZERO_CMD 3
@@ -23,6 +31,13 @@
 
 #define BUFFER_SIZE 0x100
 #define BUFFER_SIZE_MASK 0xff
+
+#define FIRMWARE_VER 73
+#define HARDWARE_VER 124
+
+#define SERIAL_NO 1234
+
+#define MODEL_NO 6072
 
 // SEGMENT DISPLAY DIGIT LOOKUP TABLE
 // In binary, each bit represents a segment on the 7-segment display
@@ -41,6 +56,23 @@ enum SegmentDigit {
   SEG_NINE = 0x6f,
   SEG_F = 0x72,
   SEG_OFF = 0x0,
+};
+
+// These registers are somewhat randomly picked,
+// I haven't followed any conventions etc.
+// Hopefully it won't cause any headaches but for now they are easily changed.
+enum ModbusRegisters {
+  REG_ModelNo = 0x05a0,
+  REG_SerialNo = 0x1000,
+  REG_HardwareVer = 0x1005,
+  REG_FirmwareVer,
+
+  REG_Voltage = 0x3001,
+  REG_Current,
+  REG_Power,
+  REG_Mode,
+  REG_State,
+  REG_Fault,
 };
 
 // Translate TM1721 LCD segment data to digits
@@ -68,21 +100,21 @@ enum DisplayMode
   DM_Voltage,
 };
 
+// These match the Victron inverter state values according to (https://github.com/victronenergy/venus/wiki/dbus)
 enum PowerState
 {
-  P_Off = 0,
-  P_On,
-  P_Fault,
+  State_Off = 0,
+  State_LowPower = 1,
+  State_Fault = 2,
+  State_Inverting = 9,
 };
 
-PowerState powerState;
-DisplayMode displayMode;
-
-enum DCommand {
-  DC_Mode = 0,
-  DC_Control = 1,
-  DC_Data = 2,
-  DC_Address = 3,
+// Again, these match Victron's values, for simplicity
+enum PowerMode
+{
+  Mode_On = 2,
+  Mode_Off = 4,
+//  Mode_Eco = 5, // Victron are using this but obviously we don't support it
 };
 
 enum DFaultCode {
@@ -94,69 +126,64 @@ enum DFaultCode {
   F_ShortCircuit
 };
 
-struct TimeStruct {
-  uint32_t period;
-  uint32_t t;
-};
+PowerState powerState; // Purely reactive state, never set this explicitly from client/UI
+PowerMode powerMode; // Controlling state, this is either set explicitly via Modbus or reactively when the inverter is turned on externally
+
+DisplayMode displayMode; // Keep track of the LCD "page" - a fast button press switches between the DC (voltage) and AC (power) display
 
 volatile uint8_t buffer[BUFFER_SIZE];
 
 volatile uint8_t head = 0;
 volatile uint8_t tail = 0;
 
+// TODO: These are actually not in millis, decide what to do here.
+//       With 16-bit registers using millis is a bit tight, so this
+//       is probably fine, but they will have to be scaled by client
+
 int32_t voltage = 0; // Millivolts
 int32_t  current = 0; // Milliamps
 int32_t power = 0; // Milliwatts
 
-uint32_t reportTimer = 0;
-uint32_t reportPeriod = 1000000; //us
-
+// Flag to keep an eye on SPI activity
 volatile uint8_t didReceiveSPI = 0;
 
+// Timing
 uint32_t keepAliveTimer = 0;
 uint32_t keepAlivePeriod = 1000000; //us
 
 uint32_t displaySwitchTimer = 0;
 uint32_t displaySwitchPeriod = 800000; //us
 
+// TODO: Alarms (follow Victron specs)
 DFaultCode faultCode = F_NoFault;
 
+// Buffer for SPI messages
 uint8_t message[8];
 
-// Modbus testing
-//ModbusSerial modbus(Serial, 42);
-
+// TODO: Modbus through the hardware UART (once firmware is more stable)
 SoftwareSerial Serial2(4, 5);
+ModbusSerial modbus(Serial2, 42);
 
-// Receive SPI data
+// SPI interrupt
 ISR(SPI_STC_vect)
 {
   buffer[++head & BUFFER_SIZE_MASK] = SPDR;
   didReceiveSPI = 1;
 }
 
-void TurnOff()
-{
-  Serial.println("Turning off inverter...");
-  LongPress();
-}
-
-void TurnOn()
-{
-  Serial.println("Turning on inverter...");
-  LongPress();
-}
-
-void SetOn()
+// Some helper functions to control state
+void ModeOn()
 {
   head = 0;
   tail = 0;
-  powerState = P_On;
+  powerMode = Mode_On;
+  modbus.setHreg(REG_Mode, Mode_On);
 }
 
-void SetOff()
+void ModeOff()
 {
-  powerState = P_Off;
+  powerMode = Mode_Off;
+  modbus.setHreg(REG_Mode, Mode_Off);
 }
 
 void SwitchDisplay()
@@ -168,10 +195,13 @@ void SwitchDisplay()
   SPI.attachInterrupt();
 }
 
-void LongPress()
+void DoPressDown()
 {
   digitalWrite(POWER_PIN, HIGH);
-  delay(3200);
+}
+
+void DoPressUp()
+{
   digitalWrite(POWER_PIN, LOW);
 }
 
@@ -204,14 +234,50 @@ void setup() {
   delay(500);
 
   Serial.println("Starting up...");
-  Serial2.println("Starting Soft Serial...");
+  modbus.config(38400);
+  modbus.setAdditionalServerData("TEST");
 
-  // Start in off mode
-  powerState = P_Off;
+  // Start in off state
+  powerState = State_Off;
+  powerMode = Mode_Off;
+
+  // Set up Modbus registers
+  modbus.addHreg(REG_ModelNo, MODEL_NO);
   
+  // TODO: Fix serial number registers
+  modbus.addHreg(REG_SerialNo + 0, 'A' >> 8 & 'B');
+  modbus.addHreg(REG_SerialNo + 1, 'C' >> 8 & 'D');
+  modbus.addHreg(REG_SerialNo + 2, 'E' >> 8 & 'F');
+
+  // TODO: Proper version numbers and decoding on Venus
+  modbus.addHreg(REG_HardwareVer, HARDWARE_VER);
+  modbus.addHreg(REG_FirmwareVer, FIRMWARE_VER);
+
+  modbus.addHreg(REG_Voltage);
+  modbus.addHreg(REG_Current);
+  modbus.addHreg(REG_Power);
+
+  modbus.addHreg(REG_State, powerState);
+  modbus.addHreg(REG_Mode, powerMode);
+  
+  // Short delay to allow SPI to arrive, in case the inverter is already on
   delay(500);
   
-  Serial.println("Starting reporting.");
+  Serial.println("Series607 Interface ready.");
+}
+
+int32_t CalculateCurrent(int32_t voltage, int32_t power) {
+
+  // Early out in case of zero denominator
+  if (voltage == 0) {
+    return 0;
+  }
+
+  //Increase resolution for calculation
+  voltage *= 4;
+  power *= 4;
+
+  return (power / voltage) >> 4; // One division is fine, just don't get comfortable using them on the 328... :p
 }
 
 // Flag when we get an actual data packet, not commands
@@ -221,6 +287,8 @@ uint8_t receivingData = 0;
 uint8_t address = 0;
 
 void loop() {
+  
+  modbus.task();
 
   uint8_t data = 0;
   uint8_t _head = head; // Cache the current buffer head locally (so the ISR can safely cut in here and write new SPI data)
@@ -253,12 +321,12 @@ void loop() {
       continue; // Skip the current command byte
 
     default: break;
-  }
+    }
 
-  // We're currently receiving data, so compose the message one byte at a time
-  if (receivingData == 1) {
-    message[address++] = data;
-  }
+    // We're currently receiving data, so compose the message one byte at a time
+    if (receivingData == 1) {
+      message[address++] = data;
+    }
 
     // Received complete message (6 bytes), let's process
     if (address > 5) {
@@ -275,12 +343,12 @@ void loop() {
       // F04: High temperature
       // F05: AC-side short circui
 
-      // State should be on since we're receiving messages, so set it here to be able to leave fault mode
-      powerState = P_On;
+      // Assume no fault...
+      faultCode = F_NoFault;
 
+      //...then falsify
       if(message[1] >> 1 == SEG_F) {
         faultCode = (DFaultCode)SegmentDataToDigit(message[3] >> 1);
-        powerState = P_Fault;
       }
 
       else if (displayMode == DM_Voltage) {
@@ -294,61 +362,78 @@ void loop() {
         power = SegmentDataToDigit(message[3] >> 1) * 10;
         power += SegmentDataToDigit(message[2] >> 1) * 100;
         power += SegmentDataToDigit(message[1] >> 1) * 1000;
-
       }
-        // Message handled, reset state
-        receivingData = 0;
-        address = 0;
+
+      // Message handled, reset state
+      receivingData = 0;
+      address = 0;
     }
   }
-
   // When we're done processing messages, do higher level stuff
 
-  // Expect commands
-  // TODO: Proper modbus interface
-  uint8_t cmd = Serial.read();
-  switch(cmd) {
-    // Power cycle (just receive ASCII "1" for now)
-    case 49:
-      // Switch power state
-      if (powerState == P_On) {
-        TurnOff();
-      } else {
-        TurnOn();
-      }
-    break;
-
-    default:
-    break;
-
+  // Set fault state if we detected a fault
+  if(faultCode != F_NoFault) {
+    powerState = State_Fault;
   }
 
-  // Do regular timed updates
   uint32_t t = micros();
 
+  // Check the mode register, should we power up/down?
+  switch((PowerMode)modbus.hreg(REG_Mode)) {
+    case Mode_On: {
+      // If the mode is On and the inverter is currently off, and not in fault mode, press the button
+      // TODO: Timeout, don't want to indefinitely press the button if something's wrong
+      if(powerState == State_Off)
+        DoPressDown();
+      else
+        DoPressUp();
+    } break;
+
+    case Mode_Off: {
+      // If the mode is Off and the inverter isn't off, press the button
+      if(powerState != State_Off)
+        DoPressDown();
+      else
+        DoPressUp();
+    } break;
+  }
+
+  // FSM
   switch(powerState) {
 
-    // Inverter off, set state but don't mess with the unit
-    case P_Off: {
+    case State_Off: {
       voltage = 0;
       power = 0;
       current = 0;
       if (didReceiveSPI == 1) {
+        // The inverter turned on, so we should change state. Are we generating power?
+        if(power > 0) {
+          powerState = State_Inverting;
+        } else {
+          powerState = State_LowPower;
+        }
         Serial.println("Inverter turned on.");
-          SetOn();
+        ModeOn();
       }
     } break;
 
     // Inverter on, set state, switch display etc
-    case P_On:
+    case State_LowPower:
+    case State_Inverting:
+    
       // Ask inverter to switch display mode on the LCD (to sniff both DC voltage and AC power values)
       if(t - displaySwitchTimer > displaySwitchPeriod) {
         SwitchDisplay();
         displaySwitchTimer = t;
       }
 
-    // P_On falls through to P_Fault so we can skip switching displays in fault mode (it has no effect) but still do keepalive
-    case P_Fault:
+    // On-states fall through to State_Fault so we can skip switching displays in fault mode (button presses have no effect) but still do keepalive in one place
+    case State_Fault:
+
+      // Clear fault state and set correct state according to power usage
+      if (faultCode == F_NoFault) {
+        powerState = power > 0 ? State_Inverting : State_LowPower;
+      }
       // If we've received at least one SPI message, reset keepalive, otherwise count down
       if (didReceiveSPI == 1) {
         keepAliveTimer = t;
@@ -356,45 +441,21 @@ void loop() {
 
       } else if (t - keepAliveTimer > keepAlivePeriod) {
         keepAliveTimer = 0;
-        SetOff();
+        Serial.println("Inverter turned off.");
+        powerState = State_Off;
+        ModeOff();
       }
     break;
   }
 
-  // Calculate data
-  uint32_t _v = voltage * 4;
-  uint32_t _p = power * 4;
+  // Update data registers
+  
+  // Recalculate current in case power or voltage changed
+  // TODO: Recalculate only when value changes
+  current = CalculateCurrent(voltage, power);
 
-  // Avoid division by zero
-  if (voltage > 0) {
-    current = (_p / _v) >> 4; // One division is fine, just don't get comfortable using them on the 328... :p
-  } else {
-    current = 0;
-  }
-
-  // TODO: Send data over modbus
-  if (t - reportTimer > reportPeriod) {
-    Serial.print("Inverter is ");
-    switch(powerState) {
-      case P_On:
-        Serial.println("on.");
-      break;
-      case P_Fault:
-        Serial.println("in fault mode.");
-      break;
-      case P_Off:
-        Serial.println("off.");
-      break;
-    }
-
-    Serial.print("Voltage: ");
-    Serial.print(voltage);
-    Serial.println(" mV");
-    
-    Serial.print("Current: ");
-    Serial.print(current);
-    Serial.println(" mA");
-    
-    reportTimer = t;
-  }
+  modbus.setHreg(REG_Voltage, voltage);
+  modbus.setHreg(REG_Power, power);
+  modbus.setHreg(REG_Current, current);
+  modbus.setHreg(REG_State, powerState);
 }
