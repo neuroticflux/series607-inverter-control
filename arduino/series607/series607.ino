@@ -27,7 +27,7 @@
 
 #define SET_ADDRESS_ZERO_CMD 3
 
-#define POWER_PIN 7
+#define POWER_PIN 4
 
 #define BUFFER_SIZE 0x100
 #define BUFFER_SIZE_MASK 0xff
@@ -38,6 +38,10 @@
 #define SERIAL_NO 1234
 
 #define MODEL_NO 6072
+
+// TODO: Can we get AC voltage from Venus in case it's available and override this? Since this isn't actually
+// reading a sensor it feels like a bit of a hack.
+#define AC_VOLTAGE 230
 
 // SEGMENT DISPLAY DIGIT LOOKUP TABLE
 // In binary, each bit represents a segment on the 7-segment display
@@ -149,10 +153,10 @@ volatile uint8_t didReceiveSPI = 0;
 
 // Timing
 uint32_t keepAliveTimer = 0;
-uint32_t keepAlivePeriod = 1000000; //us
+uint32_t keepAlivePeriod = 700000; //us
 
 uint32_t displaySwitchTimer = 0;
-uint32_t displaySwitchPeriod = 800000; //us
+uint32_t displaySwitchPeriod = 1000000; //us
 
 // TODO: Alarms (follow Victron specs)
 DFaultCode faultCode = F_NoFault;
@@ -160,9 +164,11 @@ DFaultCode faultCode = F_NoFault;
 // Buffer for SPI messages
 uint8_t message[8];
 
-// TODO: Modbus through the hardware UART (once firmware is more stable)
-SoftwareSerial Serial2(4, 5);
-ModbusSerial modbus(Serial2, 42);
+// Arduino Micro has hardware serial on Serial1, the built-in USB serial is software
+// and doesn't work with VenusOS (it shows up as ttyACM* instead of ttyUSB*).
+// So we can't use the USB port on the Micro for Modbus, but for now
+// we'll use an FTDI breakout board on Serial1 and eventually maybe move to a custom PCB.
+ModbusSerial modbus(Serial1, 42);
 
 // SPI interrupt
 ISR(SPI_STC_vect)
@@ -229,12 +235,18 @@ void setup() {
   SPI.setClockDivider(SPI_CLOCK_DIV2);
   SPI.attachInterrupt();
 
+  // TODO: Proper debug #define and dummy functions for debug/release builds
   Serial.begin(115200);
-  Serial2.begin(38400);
+
+  // TODO: Dip switches to set baud rate?
+  Serial1.begin(38400);
+
   delay(500);
 
   Serial.println("Starting up...");
   modbus.config(38400);
+  
+  // TODO: Figure out if this is useful for anything
   modbus.setAdditionalServerData("TEST");
 
   // Start in off state
@@ -242,6 +254,8 @@ void setup() {
   powerMode = Mode_Off;
 
   // Set up Modbus registers
+  // NOTE: For now everything is holding registers, it looks like Venus defaults to sending the Modbus 0x3 command (Read Holding Register) no matter what,
+  // and uses a flag in the driver to signify read-only vs read/write registers. See the Python script.
   modbus.addHreg(REG_ModelNo, MODEL_NO);
   
   // TODO: Fix serial number registers
@@ -259,23 +273,20 @@ void setup() {
 
   modbus.addHreg(REG_State, powerState);
   modbus.addHreg(REG_Mode, powerMode);
-  
+
+  // TODO: Fault alarm registers
+
   // Short delay to allow SPI to arrive, in case the inverter is already on
   delay(500);
   
   Serial.println("Series607 Interface ready.");
 }
 
-int32_t CalculateCurrent(int32_t voltage, int32_t power) {
+int32_t CalculateCurrent(int32_t power) {
 
-  // Early out in case of zero denominator
-  if (voltage == 0) {
-    return 0;
-  }
-
-  //Increase resolution for calculation
-  voltage *= 4;
-  power *= 4;
+  // Some fixed-point math to avoid floats
+  int32_t voltage = AC_VOLTAGE << 4;
+  power <<= 4;
 
   return (power / voltage) >> 4; // One division is fine, just don't get comfortable using them on the 328... :p
 }
@@ -312,6 +323,7 @@ void loop() {
 
     data = buffer[++tail & BUFFER_SIZE_MASK];
 
+    // TODO: Clean this up, functionize etc
     switch(data) {
 
     // Got set address 0 command, so let's start receiving
@@ -335,7 +347,7 @@ void loop() {
       displayMode = (DisplayMode)(message[3] & 0x1);
 
       // TODO: Detect unknown segment data (SegmentDataToDigit() returns -1) and handle
-      
+
       // FAULT CODES:
       // F01: Low input voltage
       // F02: High input voltage
@@ -383,18 +395,20 @@ void loop() {
     case Mode_On: {
       // If the mode is On and the inverter is currently off, and not in fault mode, press the button
       // TODO: Timeout, don't want to indefinitely press the button if something's wrong
-      if(powerState == State_Off)
+      if(powerState == State_Off) {
         DoPressDown();
-      else
+      } else {
         DoPressUp();
+      }
     } break;
 
     case Mode_Off: {
       // If the mode is Off and the inverter isn't off, press the button
-      if(powerState != State_Off)
+      if(powerState != State_Off) {
         DoPressDown();
-      else
+      } else {
         DoPressUp();
+      }
     } break;
   }
 
@@ -405,6 +419,13 @@ void loop() {
       voltage = 0;
       power = 0;
       current = 0;
+
+      // TODO: Turning off is slightly unreliable because setting the mode switch line high activates SPI,
+      // and because we're still using the power pin to switch display mode, the device thinks that the inverter turned back on,
+      // then off again when keepAlive times out.
+      // Easiest solution is probably to have some grace period after changing power state before we allow switching the display mode.
+      // Seems we're also receiving some garbage data packets when this happens, sometimes the voltage will report as several hundred volts for example,
+      // so it's probably a good idea for several reasons.
       if (didReceiveSPI == 1) {
         // The inverter turned on, so we should change state. Are we generating power?
         if(power > 0) {
@@ -422,14 +443,19 @@ void loop() {
     case State_Inverting:
     
       // Ask inverter to switch display mode on the LCD (to sniff both DC voltage and AC power values)
-      if(t - displaySwitchTimer > displaySwitchPeriod) {
+      if(t - displaySwitchTimer > displaySwitchPeriod && powerMode != Mode_Off) {
         SwitchDisplay();
         displaySwitchTimer = t;
+
+        // TODO: Proper debug mode
+//        Serial.print("Voltage: ");
+//        Serial.println(voltage);
+//        Serial.print("Current: ");
+//        Serial.println(current);
       }
 
     // On-states fall through to State_Fault so we can skip switching displays in fault mode (button presses have no effect) but still do keepalive in one place
     case State_Fault:
-
       // Clear fault state and set correct state according to power usage
       if (faultCode == F_NoFault) {
         powerState = power > 0 ? State_Inverting : State_LowPower;
@@ -449,10 +475,7 @@ void loop() {
   }
 
   // Update data registers
-  
-  // Recalculate current in case power or voltage changed
-  // TODO: Recalculate only when value changes
-  current = CalculateCurrent(voltage, power);
+  current = CalculateCurrent(power);
 
   modbus.setHreg(REG_Voltage, voltage);
   modbus.setHreg(REG_Power, power);
