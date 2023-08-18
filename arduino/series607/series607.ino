@@ -32,8 +32,8 @@
 #define BUFFER_SIZE 0x100
 #define BUFFER_SIZE_MASK 0xff
 
-#define FIRMWARE_VER 73
-#define HARDWARE_VER 124
+#define FIRMWARE_VER 0x0001
+#define HARDWARE_VER 0x0001
 
 #define SERIAL_NO 1234
 
@@ -71,12 +71,16 @@ enum ModbusRegisters {
   REG_HardwareVer = 0x1005,
   REG_FirmwareVer,
 
-  REG_Voltage = 0x3001,
+  REG_DCVoltage = 0x3001,
+  REG_ACVoltage, // The inverter isn't measuring AC volts, but we might want to add functionality for it eventually. For now we just fake it by sending AC_VOLTAGE whenever the inverter is on.
   REG_Current,
   REG_Power,
   REG_Mode,
   REG_State,
-  REG_Fault,
+  REG_AlarmLowVoltage = 0x3010,
+  REG_AlarmHighVoltage,
+  REG_AlarmOverload,
+  REG_AlarmHighTemperature,
 };
 
 // Translate TM1721 LCD segment data to digits
@@ -121,13 +125,19 @@ enum PowerMode
 //  Mode_Eco = 5, // Victron are using this but obviously we don't support it
 };
 
-enum DFaultCode {
-  F_NoFault = 0,
-  F_UnderVoltage,
-  F_OverVoltage,
-  F_Overload,
-  F_Overheat,
-  F_ShortCircuit
+enum FaultCode {
+  Fault_NoFault = 0,
+  Fault_UnderVoltage,
+  Fault_OverVoltage,
+  Fault_Overload,
+  Fault_Overheat,
+  Fault_ShortCircuit,
+};
+
+enum FaultLevel {
+  FaultLevel_OK = 0,
+  FaultLevel_Warning,
+  FaultLevel_Alarm
 };
 
 PowerState powerState; // Purely reactive state, never set this explicitly from client/UI
@@ -159,7 +169,7 @@ uint32_t displaySwitchTimer = 0;
 uint32_t displaySwitchPeriod = 1000000; //us
 
 // TODO: Alarms (follow Victron specs)
-DFaultCode faultCode = F_NoFault;
+FaultCode faultCode = Fault_NoFault;
 
 // Buffer for SPI messages
 uint8_t message[8];
@@ -218,7 +228,23 @@ void ShortPress()
   digitalWrite(POWER_PIN, LOW);
 }
 
+// TODO: Maybe try doing just a warning on overload and alarm on short circuit using the Overload register, since there's no short circuit alarm on VenusOS
+void UpdateAlarms()
+{
+  // This is quite ugly but for now it works. The more I work with this modbus lib the less I like it...
+  // TODO: Should really look into rolling our own or replace it.
+  // Iterate all the alarms and reset every code except the one that was triggered.
+  modbus.setHreg(REG_AlarmLowVoltage, faultCode == Fault_UnderVoltage ? FaultLevel_Alarm : FaultLevel_OK);
+  modbus.setHreg(REG_AlarmHighVoltage, faultCode == Fault_OverVoltage ? FaultLevel_Alarm : FaultLevel_OK);
+  modbus.setHreg(REG_AlarmOverload, faultCode == Fault_Overload ? FaultLevel_Alarm : FaultLevel_OK);
+  modbus.setHreg(REG_AlarmHighTemperature, faultCode == Fault_Overheat ? FaultLevel_Alarm : FaultLevel_OK);
+  modbus.setHreg(REG_AlarmOverload, faultCode == Fault_ShortCircuit ? FaultLevel_Alarm : FaultLevel_OK); // VenusOS doesn't support the short circuit fault code, so we'll set overload instead
+}
+
 void setup() {
+
+  // Enable internal pullup resistor on SS line, in case the device is disconnected from the inverter we don't want garbage data in the SPI buffer
+  pinMode(SS, INPUT_PULLUP);
 
   // Set up power on/mode switch pin
   pinMode(POWER_PIN, OUTPUT);
@@ -243,7 +269,7 @@ void setup() {
 
   delay(500);
 
-  Serial.println("Starting up...");
+  Serial.print("Series607 Interface starting up... ");
   modbus.config(38400);
   
   // TODO: Figure out if this is useful for anything
@@ -267,28 +293,35 @@ void setup() {
   modbus.addHreg(REG_HardwareVer, HARDWARE_VER);
   modbus.addHreg(REG_FirmwareVer, FIRMWARE_VER);
 
-  modbus.addHreg(REG_Voltage);
+  // Actual device stats and alarms/warnings
+  modbus.addHreg(REG_DCVoltage);
+  modbus.addHreg(REG_ACVoltage);
   modbus.addHreg(REG_Current);
   modbus.addHreg(REG_Power);
 
   modbus.addHreg(REG_State, powerState);
   modbus.addHreg(REG_Mode, powerMode);
 
+  modbus.addHreg(REG_AlarmLowVoltage, 0);
+  modbus.addHreg(REG_AlarmHighVoltage, 0);
+  modbus.addHreg(REG_AlarmOverload, 0);
+  modbus.addHreg(REG_AlarmHighTemperature, 0);
+
   // TODO: Fault alarm registers
 
   // Short delay to allow SPI to arrive, in case the inverter is already on
   delay(500);
   
-  Serial.println("Series607 Interface ready.");
+  Serial.println("Ready.");
 }
 
 int32_t CalculateCurrent(int32_t power) {
 
   // Some fixed-point math to avoid floats
-  int32_t voltage = AC_VOLTAGE << 4;
-  power <<= 4;
+  int32_t voltage = AC_VOLTAGE * 10;
+  power *= 1000;
 
-  return (power / voltage) >> 4; // One division is fine, just don't get comfortable using them on the 328... :p
+  return (power / voltage); // One division is fine, just don't get comfortable using them on the 328... :p
 }
 
 // Flag when we get an actual data packet, not commands
@@ -356,24 +389,25 @@ void loop() {
       // F05: AC-side short circui
 
       // Assume no fault...
-      faultCode = F_NoFault;
+      faultCode = Fault_NoFault;
 
       //...then falsify
       if(message[1] >> 1 == SEG_F) {
-        faultCode = (DFaultCode)SegmentDataToDigit(message[3] >> 1);
+        faultCode = (FaultCode)SegmentDataToDigit(message[3] >> 1);
+        UpdateAlarms();
       }
 
       else if (displayMode == DM_Voltage) {
         // Compose DC voltage result (in mV)
-        voltage = SegmentDataToDigit(message[3] >> 1) * 10;
-        voltage += SegmentDataToDigit(message[2] >> 1) * 100;
-        voltage += SegmentDataToDigit(message[1] >> 1) * 1000;
+        voltage = SegmentDataToDigit(message[3] >> 1) * 100;
+        voltage += SegmentDataToDigit(message[2] >> 1) * 1000;
+        voltage += SegmentDataToDigit(message[1] >> 1) * 10000;
 
       } else {
-        // Compose power result (in mW)
-        power = SegmentDataToDigit(message[3] >> 1) * 10;
-        power += SegmentDataToDigit(message[2] >> 1) * 100;
-        power += SegmentDataToDigit(message[1] >> 1) * 1000;
+        // TODO: Look into 32-bit register by using two regs for one value, but might be easier with own/other modbus lib
+        power = SegmentDataToDigit(message[3] >> 1) * 1;
+        power += SegmentDataToDigit(message[2] >> 1) * 10;
+        power += SegmentDataToDigit(message[1] >> 1) * 100;
       }
 
       // Message handled, reset state
@@ -384,7 +418,7 @@ void loop() {
   // When we're done processing messages, do higher level stuff
 
   // Set fault state if we detected a fault
-  if(faultCode != F_NoFault) {
+  if(faultCode != Fault_NoFault) {
     powerState = State_Fault;
   }
 
@@ -452,12 +486,15 @@ void loop() {
 //        Serial.println(voltage);
 //        Serial.print("Current: ");
 //        Serial.println(current);
+//        Serial.print("Power: ");
+//        Serial.println(power);
       }
 
     // On-states fall through to State_Fault so we can skip switching displays in fault mode (button presses have no effect) but still do keepalive in one place
     case State_Fault:
       // Clear fault state and set correct state according to power usage
-      if (faultCode == F_NoFault) {
+      if (faultCode == Fault_NoFault) {
+        UpdateAlarms();
         powerState = power > 0 ? State_Inverting : State_LowPower;
       }
       // If we've received at least one SPI message, reset keepalive, otherwise count down
@@ -477,7 +514,8 @@ void loop() {
   // Update data registers
   current = CalculateCurrent(power);
 
-  modbus.setHreg(REG_Voltage, voltage);
+  modbus.setHreg(REG_DCVoltage, voltage);
+  modbus.setHreg(REG_ACVoltage, powerState != State_Off ? AC_VOLTAGE : 0);
   modbus.setHreg(REG_Power, power);
   modbus.setHreg(REG_Current, current);
   modbus.setHreg(REG_State, powerState);
