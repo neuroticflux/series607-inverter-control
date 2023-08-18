@@ -46,7 +46,7 @@ class Series607(device.ModbusDevice):
 			Reg_u16(0x3001,  '/Dc/0/Voltage',	1000, '%.1f V'),
 			Reg_u16(0x3002,  '/Ac/Out/L1/V',        1,    '%.1f V'),
 			Reg_u16(0x3003,  '/Ac/Out/L1/I',	1000, '%.1f A'),
-			Reg_u16(0x3004,  '/Ac/Out/L1/P',	10,   '%.1f W'),
+			Reg_u16(0x3004,  '/Ac/Out/L1/P',	1,    '%.1f W'),
 			Reg_u16(0x3005,  '/Mode', write=True),
 			Reg_u16(0x3006,  '/State'),
 			Reg_u16(0x3010,  '/Alarms/LowVoltage'),
