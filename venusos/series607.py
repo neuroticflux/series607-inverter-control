@@ -10,11 +10,11 @@ log = logging.getLogger()
 class Reg_ver(Reg, int):
 	def __init__(self, base, name):
 		Reg.__init__(self, base, 1, name)
-	
+
 	def __int__(self):
 		v = self.value
 		return v[0] << 16 | v[1] << 8 | v[2]
-	
+
 	def __str__(self):
 		return '%d.%d.%d' % self.value
 
@@ -43,11 +43,18 @@ class Series607(device.ModbusDevice):
 
 	def device_init(self):
 		self.data_regs = [
-			Reg_u16(0x3001,  '/Dc/0/Voltage',	100, '%.1f V'),
-			Reg_u16(0x3002,  '/Ac/Out/L1/I',	100, '%.1f A'),
-			Reg_u16(0x3003,  '/Ac/Out/L1/P',	100, '%.1f W'),
-			Reg_u16(0x3004,  '/Mode', write=True),
-			Reg_u16(0x3005,  '/State'),
+			Reg_u16(0x3001,  '/Dc/0/Voltage',	1000, '%.1f V'),
+			Reg_u16(0x3002,  '/Ac/Out/L1/V',        1,    '%.1f V'),
+			Reg_u16(0x3003,  '/Ac/Out/L1/I',	1000, '%.1f A'),
+			Reg_u16(0x3004,  '/Ac/Out/L1/P',	10,   '%.1f W'),
+			Reg_u16(0x3005,  '/Mode', write=True),
+			Reg_u16(0x3006,  '/State'),
+			Reg_u16(0x3010,  '/Alarms/LowVoltage'),
+			Reg_u16(0x3011,  '/Alarms/HighVoltage'),
+			Reg_u16(0x3012,  '/Alarms/Overload'),
+			Reg_u16(0x3013,  '/Alarms/HighTemperature'),
+#			Reg_u16(0x3014,  '/Alarms/ShortCircuit'), # Doesn't exist in Venus for some reason, short circuit fault will trigger overload alarm
+
 		]
 
 	def get_ident(self):
